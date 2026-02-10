@@ -1,0 +1,770 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── AUTHENTICATION & RBAC ────────────────────────────────────
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  phone          String?
+  passwordHash   String
+  firstName      String
+  lastName       String
+  graduationYear Int?
+  profilePhoto   String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  roles           UserRole[]
+  bookings        Booking[]
+  mealRedemptions MealRedemption[]
+  badges          Badge[]
+  reportedIncidents Incident[]         @relation("reporter")
+  assignedTasks   HousekeepingTask[]   @relation("assignee")
+  notifications   Notification[]
+  accessLogs      AccessLog[]
+  auditLogs       AuditLog[]
+  feedbacks       Feedback[]
+  refreshTokens   RefreshToken[]
+
+  @@index([email])
+}
+
+model RefreshToken {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceInfo  String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        RoleName     @unique
+  description String?
+  permissions Permission[]
+  users       UserRole[]
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Permission {
+  id       String           @id @default(cuid())
+  resource String
+  action   PermissionAction
+  roleId   String
+  role     Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, resource, action])
+  @@index([roleId])
+}
+
+enum RoleName {
+  ALUMNI_GUEST
+  ACCOMMODATION_ADMIN
+  HOUSEKEEPING_STAFF
+  CATERING_STAFF
+  SECURITY_ACCESS
+  EVENT_COORDINATOR
+  FINANCE_ADMIN
+  SUPER_ADMIN
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+}
+
+// ─── EVENT ────────────────────────────────────────────────────
+
+model Event {
+  id          String   @id @default(cuid())
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  venue       String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  buildings     Building[]
+  bookings      Booking[]
+  meals         Meal[]
+  scheduleItems ScheduleItem[]
+  spaces        Space[]
+}
+
+// ─── ACCOMMODATION ────────────────────────────────────────────
+
+model Building {
+  id       String  @id @default(cuid())
+  name     String
+  eventId  String
+  event    Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  floors   Int     @default(1)
+  location String?
+  rooms    Room[]
+
+  @@index([eventId])
+}
+
+model RoomType {
+  id       String @id @default(cuid())
+  name     String @unique
+  capacity Int
+  rooms    Room[]
+}
+
+model Room {
+  id          String      @id @default(cuid())
+  number      String
+  buildingId  String
+  building    Building    @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  roomTypeId  String
+  roomType    RoomType    @relation(fields: [roomTypeId], references: [id])
+  floor       Int         @default(1)
+  status      RoomStatus  @default(AVAILABLE)
+  cleanStatus CleanStatus @default(CLEAN)
+  notes       String?
+
+  bookings            Booking[]
+  housekeepingTasks   HousekeepingTask[]
+  inventoryItems      RoomInventory[]
+  maintenanceRequests MaintenanceRequest[]
+  assets              RoomAsset[]
+
+  @@unique([number, buildingId])
+  @@index([buildingId])
+  @@index([status])
+  @@index([cleanStatus])
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  OUT_OF_SERVICE
+  MAINTENANCE
+}
+
+enum CleanStatus {
+  CLEAN
+  DIRTY
+  IN_PROGRESS
+  INSPECTED
+}
+
+// ─── BOOKING & CHECK-IN ──────────────────────────────────────
+
+model Booking {
+  id                  String        @id @default(cuid())
+  userId              String
+  user                User          @relation(fields: [userId], references: [id])
+  eventId             String
+  event               Event         @relation(fields: [eventId], references: [id])
+  roomId              String?
+  room                Room?         @relation(fields: [roomId], references: [id])
+  status              BookingStatus @default(PENDING)
+  arrivalDate         DateTime
+  departureDate       DateTime
+  specialRequirements String?
+  groupBookingId      String?
+  groupBooking        GroupBooking? @relation(fields: [groupBookingId], references: [id])
+  confirmedAt         DateTime?
+  cancelledAt         DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  checkIn          CheckIn?
+  mealEntitlements MealEntitlement[]
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([roomId])
+  @@index([status])
+  @@index([groupBookingId])
+}
+
+model GroupBooking {
+  id        String    @id @default(cuid())
+  name      String
+  contactId String
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+}
+
+model CheckIn {
+  id           String        @id @default(cuid())
+  bookingId    String        @unique
+  booking      Booking       @relation(fields: [bookingId], references: [id])
+  checkedInAt  DateTime      @default(now())
+  checkedInBy  String?
+  method       CheckInMethod
+  checkedOutAt DateTime?
+  checkedOutBy String?
+  damageNotes  String?
+  damagePhotos String[]
+
+  @@index([bookingId])
+}
+
+enum CheckInMethod {
+  QR_SELF
+  STAFF_ASSISTED
+  MOBILE_SELF
+}
+
+// ─── HOUSEKEEPING ────────────────────────────────────────────
+
+model HousekeepingTask {
+  id          String           @id @default(cuid())
+  roomId      String
+  room        Room             @relation(fields: [roomId], references: [id])
+  assigneeId  String?
+  assignee    User?            @relation("assignee", fields: [assigneeId], references: [id])
+  type        HousekeepingType
+  status      TaskStatus       @default(PENDING)
+  priority    Priority         @default(NORMAL)
+  notes       String?
+  photos      String[]
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([roomId])
+  @@index([assigneeId])
+  @@index([status])
+}
+
+enum HousekeepingType {
+  DAILY_CLEAN
+  TURNOVER_CLEAN
+  INSPECTION
+  DEEP_CLEAN
+  LINEN_CHANGE
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  ESCALATED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// ─── INVENTORY & CONSUMABLES ─────────────────────────────────
+
+model InventoryItem {
+  id           String            @id @default(cuid())
+  name         String
+  category     InventoryCategory
+  unit         String
+  totalStock   Int
+  minThreshold Int
+  costPerUnit  Float             @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  roomAllocations RoomInventory[]
+  logs            InventoryLog[]
+}
+
+model RoomInventory {
+  id            String        @id @default(cuid())
+  roomId        String
+  room          Room          @relation(fields: [roomId], references: [id])
+  itemId        String
+  item          InventoryItem @relation(fields: [itemId], references: [id])
+  quantity      Int
+  lastRestocked DateTime      @default(now())
+
+  @@unique([roomId, itemId])
+  @@index([roomId])
+  @@index([itemId])
+}
+
+model InventoryLog {
+  id        String          @id @default(cuid())
+  itemId    String
+  item      InventoryItem   @relation(fields: [itemId], references: [id])
+  action    InventoryAction
+  quantity  Int
+  roomId    String?
+  staffId   String?
+  notes     String?
+  createdAt DateTime        @default(now())
+
+  @@index([itemId])
+}
+
+enum InventoryCategory {
+  TOILETRY
+  LINEN
+  CONSUMABLE
+  FURNITURE
+  EQUIPMENT
+}
+
+enum InventoryAction {
+  RESTOCK
+  CONSUME
+  TRANSFER
+  WRITE_OFF
+}
+
+// ─── MAINTENANCE ─────────────────────────────────────────────
+
+model MaintenanceRequest {
+  id            String              @id @default(cuid())
+  roomId        String
+  room          Room                @relation(fields: [roomId], references: [id])
+  reportedBy    String
+  severity      MaintenanceSeverity
+  category      String
+  description   String
+  photos        String[]
+  status        TaskStatus          @default(PENDING)
+  assignedTo    String?
+  estimatedCost Float?
+  actualCost    Float?
+  resolvedAt    DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([roomId])
+  @@index([status])
+}
+
+model RoomAsset {
+  id          String         @id @default(cuid())
+  roomId      String
+  room        Room           @relation(fields: [roomId], references: [id])
+  name        String
+  condition   AssetCondition @default(GOOD)
+  installedAt DateTime       @default(now())
+  lastChecked DateTime?
+  notes       String?
+
+  @@index([roomId])
+}
+
+enum MaintenanceSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  REPLACED
+}
+
+// ─── CATERING & MEALS ────────────────────────────────────────
+
+model Meal {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id])
+  name        String
+  type        MealType
+  date        DateTime
+  startTime   DateTime
+  endTime     DateTime
+  venue       String?
+  costPerHead Float    @default(10.00)
+  maxCapacity Int?
+  createdAt   DateTime @default(now())
+
+  entitlements MealEntitlement[]
+  redemptions  MealRedemption[]
+
+  @@index([eventId])
+  @@index([date])
+}
+
+model MealEntitlement {
+  id                  String   @id @default(cuid())
+  bookingId           String
+  booking             Booking  @relation(fields: [bookingId], references: [id])
+  mealId              String
+  meal                Meal     @relation(fields: [mealId], references: [id])
+  dietaryRequirements String[]
+  isRedeemed          Boolean  @default(false)
+
+  @@unique([bookingId, mealId])
+  @@index([bookingId])
+  @@index([mealId])
+}
+
+model MealRedemption {
+  id         String     @id @default(cuid())
+  mealId     String
+  meal       Meal       @relation(fields: [mealId], references: [id])
+  userId     String
+  user       User       @relation(fields: [userId], references: [id])
+  redeemedAt DateTime   @default(now())
+  scannedBy  String?
+  method     ScanMethod
+  isOffline  Boolean    @default(false)
+
+  @@unique([mealId, userId])
+  @@index([mealId])
+  @@index([userId])
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  REFRESHMENTS
+}
+
+enum ScanMethod {
+  QR_CODE
+  NFC
+  MANUAL
+}
+
+// ─── EVENTS & SCHEDULE ──────────────────────────────────────
+
+model ScheduleItem {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id])
+  title       String
+  description String?
+  location    String?
+  startTime   DateTime
+  endTime     DateTime
+  category    String?
+  isRequired  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([eventId])
+  @@index([startTime])
+}
+
+// ─── ACCESS CONTROL & BADGES ────────────────────────────────
+
+model Badge {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  qrCode    String    @unique
+  nfcTag    String?   @unique
+  type      BadgeType
+  isActive  Boolean   @default(true)
+  issuedAt  DateTime  @default(now())
+  revokedAt DateTime?
+
+  accessLogs AccessLog[]
+
+  @@index([userId])
+  @@index([qrCode])
+}
+
+model AccessLog {
+  id        String       @id @default(cuid())
+  badgeId   String
+  badge     Badge        @relation(fields: [badgeId], references: [id])
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  location  String
+  action    AccessAction
+  granted   Boolean
+  scannedBy String?
+  scannedAt DateTime     @default(now())
+
+  @@index([badgeId])
+  @@index([userId])
+  @@index([scannedAt])
+}
+
+enum BadgeType {
+  ALUMNI
+  STAFF
+  VIP
+  VENDOR
+}
+
+enum AccessAction {
+  ENTRY
+  EXIT
+  MEAL_SCAN
+  SESSION_SCAN
+}
+
+// ─── INCIDENTS ──────────────────────────────────────────────
+
+model Incident {
+  id          String         @id @default(cuid())
+  reporterId  String
+  reporter    User           @relation("reporter", fields: [reporterId], references: [id])
+  type        IncidentType
+  severity    Priority
+  title       String
+  description String
+  location    String?
+  photos      String[]
+  status      IncidentStatus @default(OPEN)
+  assignedTo  String?
+  resolvedAt  DateTime?
+  resolution  String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([reporterId])
+  @@index([status])
+  @@index([type])
+}
+
+enum IncidentType {
+  GUEST_COMPLAINT
+  SECURITY
+  MAINTENANCE
+  MEDICAL
+  CATERING
+  OTHER
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  CLOSED
+  ESCALATED
+}
+
+// ─── POWER & UTILITIES ──────────────────────────────────────
+
+model Generator {
+  id            String          @id @default(cuid())
+  name          String
+  location      String
+  fuelCapacity  Float
+  currentFuel   Float
+  status        GeneratorStatus @default(STANDBY)
+  lastServiced  DateTime?
+  criticalAreas String[]
+
+  fuelLogs  FuelLog[]
+  incidents PowerIncident[]
+}
+
+model FuelLog {
+  id          String     @id @default(cuid())
+  generatorId String
+  generator   Generator  @relation(fields: [generatorId], references: [id])
+  action      FuelAction
+  liters      Float
+  loggedBy    String
+  createdAt   DateTime   @default(now())
+
+  @@index([generatorId])
+}
+
+model PowerIncident {
+  id            String     @id @default(cuid())
+  generatorId   String?
+  generator     Generator? @relation(fields: [generatorId], references: [id])
+  description   String
+  affectedAreas String[]
+  reportedBy    String
+  resolvedAt    DateTime?
+  createdAt     DateTime   @default(now())
+
+  @@index([generatorId])
+}
+
+enum GeneratorStatus {
+  ACTIVE
+  STANDBY
+  MAINTENANCE
+  OFFLINE
+}
+
+enum FuelAction {
+  REFUEL
+  CONSUMPTION_LOG
+}
+
+// ─── SPACES & GROUNDS ───────────────────────────────────────
+
+model Space {
+  id       String      @id @default(cuid())
+  eventId  String
+  event    Event       @relation(fields: [eventId], references: [id])
+  name     String
+  type     SpaceType
+  capacity Int?
+  location String
+  status   SpaceStatus @default(AVAILABLE)
+  mapUrl   String?
+  notes    String?
+
+  structures Structure[]
+
+  @@index([eventId])
+}
+
+model Structure {
+  id         String     @id @default(cuid())
+  spaceId    String
+  space      Space      @relation(fields: [spaceId], references: [id])
+  type       String
+  dimensions String?
+  setupBy    DateTime?
+  teardownBy DateTime?
+  status     TaskStatus @default(PENDING)
+
+  @@index([spaceId])
+}
+
+enum SpaceType {
+  OUTDOOR
+  INDOOR
+  PARKING
+  CEREMONY
+  RECREATION
+}
+
+enum SpaceStatus {
+  AVAILABLE
+  RESERVED
+  IN_USE
+  UNDER_SETUP
+  CLEARED
+}
+
+// ─── NOTIFICATIONS ──────────────────────────────────────────
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id])
+  title  String
+  body   String
+  type   NotificationType
+  isRead Boolean          @default(false)
+  data   Json?
+  sentAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  CHECK_IN_REMINDER
+  MEAL_REMINDER
+  SCHEDULE_UPDATE
+  EMERGENCY
+  TASK_ASSIGNED
+  INCIDENT_UPDATE
+  SYSTEM
+}
+
+// ─── FEEDBACK ───────────────────────────────────────────────
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  category  String
+  rating    Int?
+  comment   String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─── AUDIT & SYNC ───────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  oldData    Json?
+  newData    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+model SyncQueue {
+  id           String     @id @default(cuid())
+  deviceId     String
+  userId       String
+  operation    String
+  resource     String
+  resourceId   String
+  payload      Json
+  status       SyncStatus @default(PENDING)
+  conflictData Json?
+  createdAt    DateTime   @default(now())
+  syncedAt     DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([deviceId])
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  CONFLICT
+  FAILED
+}
