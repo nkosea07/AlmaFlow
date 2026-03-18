@@ -18,6 +18,11 @@ import incidentsRoutes from "./routes/incidents.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
 import housekeepingRoutes from "./routes/housekeeping.routes.js";
 import maintenanceRoutes from "./routes/maintenance.routes.js";
+import notificationsRoutes from "./routes/notifications.routes.js";
+import accessRoutes from "./routes/access.routes.js";
+import powerRoutes from "./routes/power.routes.js";
+import spacesRoutes from "./routes/spaces.routes.js";
+import reportingRoutes from "./routes/reporting.routes.js";
 
 const app = express();
 
@@ -72,6 +77,11 @@ app.use("/api/incidents", incidentsRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/housekeeping", housekeepingRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
+app.use("/api/notifications", notificationsRoutes);
+app.use("/api/access", accessRoutes);
+app.use("/api/power", powerRoutes);
+app.use("/api/spaces", spacesRoutes);
+app.use("/api/reports", reportingRoutes);
 
 // ─── Error Handling ─────────────────────────────────────────
 

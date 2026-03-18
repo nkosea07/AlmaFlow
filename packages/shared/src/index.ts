@@ -10,4 +10,8 @@ export * from "./validators/checkin";
 export * from "./validators/event";
 export * from "./validators/inventory";
 export * from "./validators/maintenance";
+export * from "./validators/notification";
+export * from "./validators/access";
+export * from "./validators/power";
+export * from "./validators/spaces";
 export * from "./types/api";

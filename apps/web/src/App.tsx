@@ -19,6 +19,12 @@ import IncidentsPage from "@/features/incidents/IncidentsPage";
 import InventoryPage from "@/features/inventory/InventoryPage";
 import HousekeepingPage from "@/features/housekeeping/HousekeepingPage";
 import MaintenancePage from "@/features/maintenance/MaintenancePage";
+import NotificationsPage from "@/features/notifications/NotificationsPage";
+import AccessControlPage from "@/features/access/AccessControlPage";
+import PowerPage from "@/features/power/PowerPage";
+import SpacesPage from "@/features/spaces/SpacesPage";
+import ReportsPage from "@/features/reports/ReportsPage";
+import UsersPage from "@/features/users/UsersPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,30 +70,18 @@ function AppRoutes() {
         <Route path="/maintenance" element={<MaintenancePage />} />
         <Route path="/incidents" element={<IncidentsPage />} />
         <Route path="/events" element={<EventsPage />} />
-        <Route path="/access" element={<Placeholder title="Access Control" />} />
-        <Route path="/power" element={<Placeholder title="Power" />} />
-        <Route path="/spaces" element={<Placeholder title="Spaces" />} />
-        <Route path="/reports" element={<Placeholder title="Reports" />} />
-        <Route path="/users" element={<Placeholder title="Users" />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/access" element={<AccessControlPage />} />
+        <Route path="/power" element={<PowerPage />} />
+        <Route path="/spaces" element={<SpacesPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/users" element={<UsersPage />} />
       </Route>
 
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
-  );
-}
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold mb-4">{title}</h1>
-      <div className="bg-white rounded-lg border border-border p-12 text-center">
-        <p className="text-muted-foreground">
-          {title} module — coming in Phase 2+
-        </p>
-      </div>
-    </div>
   );
 }
 

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth.store";
+import api from "@/lib/api";
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -20,6 +22,7 @@ import {
   LogOut,
   Menu,
   X,
+  Bell,
 } from "lucide-react";
 
 const navItems = [
@@ -44,6 +47,17 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+
+  const { data: unreadData } = useQuery({
+    queryKey: ["unread-count"],
+    queryFn: async () => {
+      const { data } = await api.get("/notifications/unread-count");
+      return data.data;
+    },
+    refetchInterval: 15_000,
+  });
+
+  const unreadCount = unreadData?.count ?? 0;
 
   const handleLogout = async () => {
     await logout();
@@ -124,6 +138,18 @@ export default function DashboardLayout() {
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex-1" />
+          <button
+            onClick={() => navigate("/notifications")}
+            className="relative p-2 rounded-md hover:bg-accent transition-colors"
+            title="Notifications"
+          >
+            <Bell className="w-5 h-5 text-muted-foreground" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
         </header>
 
         {/* Page content */}
